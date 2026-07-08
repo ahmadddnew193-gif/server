@@ -6,145 +6,188 @@ import numpy as np
 from PIL import Image, ImageSequence
 import io
 
-st.set_page_config(page_title="MATRIX RENDER ENGINE", layout="wide")
+st.set_page_config(page_title="QUANTUM RENDER PIPELINE", layout="wide")
 
+# --- TECH-STYLED UI ---
 st.markdown("""
     <style>
-    .main { background-color: #06060c; color: #00ffcc; font-family: 'Courier New', monospace; }
-    h1, h2, h3 { color: #00ffcc !important; text-shadow: 0 0 8px #00ffcc; }
-    .stFileUploader { border: 1px dashed #00ffcc !important; }
+    .main { background-color: #030307; color: #00ff66; font-family: 'Courier New', monospace; }
+    h1, h2, h3 { color: #00ff66 !important; text-shadow: 0 0 10px #00ff66; }
+    .stFileUploader { border: 1px dashed #00ff66 !important; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📟 MATRIX RENDER PIPELINE // V2")
+st.title("🎛️ QUANTUM 2D RENDER PIPELINE")
 st.write("---")
 
-# --- TOKEN VERIFICATION FUNCTION ---
-def verify_discord_token(token):
-    """Pings Discord API to check if user token is valid."""
-    headers = {"Authorization": token}
-    response = requests.get("https://discord.com/api/v9/users/@me", headers=headers)
-    if response.status_code == 200:
-        return True, response.json().get("username", "Unknown User")
-    return False, None
-
-# --- PROCESS IMAGE ARRAYS TO TEXT MATRIX ---
-def pixel_matrix_to_braille(gray_img):
-    """Converts a single grayscale image matrix to Braille/Block format strings."""
-    frame_text = ""
-    for row in gray_img:
-        for pixel in row:
-            frame_text += "⣿" if pixel > 127 else "░"
-        frame_text += "\n"
-    return f"```\n{frame_text}```"
-
-# --- VIDEO FRAME EXTRACTION ---
-def process_video_frames(video_bytes, width, height):
-    with open("temp_input.mp4", "wb") as f:
-        f.write(video_bytes)
+# --- ADVANCED TRUE BRAILLE INTERPOLATION ENGINE ---
+def dynamic_braille_render(gray_matrix):
+    """
+    Maps a 2D gray matrix into true Unicode Braille patterns.
+    Each character represents a 2x4 sub-pixel matrix.
+    """
+    h, w = gray_matrix.shape
+    # Ensure dimensions are multiples of 4 (height) and 2 (width)
+    gray_matrix = gray_matrix[:h - (h % 4), :w - (w % 2)]
+    h, w = gray_matrix.shape
     
-    cap = cv2.VideoCapture("temp_input.mp4")
-    frames = []
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        resized = cv2.resize(gray, (width, height))
-        frames.append(pixel_matrix_to_braille(resized))
-    cap.release()
-    return frames
-
-# --- GIF FRAME EXTRACTION (Using PIL) ---
-def process_gif_frames(gif_bytes, width, height):
-    frames = []
-    img = Image.open(io.BytesIO(gif_bytes))
+    output = []
+    # Binary thresholding
+    binary = (gray_matrix > 127).astype(int)
     
-    # Iterate through every frame in the animated GIF
-    for frame in ImageSequence.Iterator(img):
-        # Convert frame to grayscale and resize
-        frame_gray = frame.convert("L")
-        frame_resized = frame_gray.resize((width, height))
-        
-        # Convert PIL frame to a NumPy matrix for pixel reading
-        matrix = np.array(frame_resized)
-        frames.append(pixel_matrix_to_braille(matrix))
-    return frames
+    # Unicode Braille dot offsets:
+    # Dot 1: r0,c0 (0x01) | Dot 4: r0,c1 (0x08)
+    # Dot 2: r1,c0 (0x02) | Dot 5: r1,c1 (0x10)
+    # Dot 3: r2,c0 (0x04) | Dot 6: r2,c1 (0x20)
+    # Dot 7: r3,c0 (0x40) | Dot 8: r3,c1 (0x80)
+    for y in range(0, h, 4):
+        line = ""
+        for x in range(0, w, 2):
+            code = 0
+            if binary[y+0, x+0]: code |= 0x01
+            if binary[y+1, x+0]: code |= 0x02
+            if binary[y+2, x+0]: code |= 0x04
+            if binary[y+0, x+1]: code |= 0x08
+            if binary[y+1, x+1]: code |= 0x10
+            if binary[y+2, x+1]: code |= 0x20
+            if binary[y+3, x+0]: code |= 0x40
+            if binary[y+3, x+1]: code |= 0x80
+            line += chr(0x2800 + code)
+        output.append(line)
+    return "```\n" + "\n".join(output) + "```"
 
-# --- SIDEBAR: AUTHENTICATION ---
-st.sidebar.header("🔑 INSTANCE CREDENTIALS")
-USER_TOKEN = st.sidebar.text_input("Discord User Token", type="password")
-TARGET_CHANNEL_ID = st.sidebar.text_input("Target Channel ID", placeholder="11223344...")
+# --- STANDARD RENDER ENGINE OPTIONS ---
+def standard_matrix_render(gray_matrix, matrix_type):
+    ramps = {
+        "High-Contrast Blocks": [" ", "░", "▒", "▓", "█"],
+        "Binary Terminal": ["0", "1"],
+        "Classic Matrix ASCII": [" ", ".", "-", "+", "*", "=", "%", "#", "@"]
+    }
+    chars = ramps[matrix_type]
+    output = []
+    for row in gray_matrix:
+        line = "".join([chars[int((pixel / 255) * (len(chars) - 1))] for pixel in row])
+        output.append(line)
+    return "```\n" + "\n".join(output) + "```"
 
-token_valid = False
-if USER_TOKEN:
-    is_valid, username = verify_discord_token(USER_TOKEN)
-    if is_valid:
-        st.sidebar.success(f"CONNECTED AS: {username}")
-        token_valid = True
+# --- ASSET DISPATCH & CONVERSION ---
+def compile_frames(file_bytes, is_gif, w, h, style):
+    frames = []
+    if is_gif:
+        img = Image.open(io.BytesIO(file_bytes))
+        for frame in ImageSequence.Iterator(img):
+            gray = np.array(frame.convert("L"))
+            resized = cv2.resize(gray, (w, h))
+            if style == "True High-Res Braille Matrix":
+                frames.append(dynamic_braille_render(resized))
+            else:
+                frames.append(standard_matrix_render(resized, style))
     else:
-        st.sidebar.error("INVALID TOKEN. ACCESS DENIED.")
+        with open("temp.mp4", "wb") as f:
+            f.write(file_bytes)
+        cap = cv2.VideoCapture("temp.mp4")
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret: break
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            resized = cv2.resize(gray, (w, h))
+            if style == "True High-Res Braille Matrix":
+                frames.append(dynamic_braille_render(resized))
+            else:
+                frames.append(standard_matrix_render(resized, style))
+        cap.release()
+    return frames
 
-# --- MAIN DASHBOARD INTERFACE ---
+# --- SECURITY HANDSHAKE ---
+st.sidebar.header("🔑 TELEMETRY ACCESS")
+USER_TOKEN = st.sidebar.text_input("User Token", type="password")
+TARGET_CHANNEL = st.sidebar.text_input("Channel ID")
+authenticated = False
+
+if USER_TOKEN:
+    res = requests.get("https://discord.com/api/v9/users/@me", headers={"Authorization": USER_TOKEN})
+    if res.status_code == 200:
+        st.sidebar.success(f"Linked: {res.json()['username']}")
+        authenticated = True
+    else:
+        st.sidebar.error("Invalid Handshake Protocol.")
+
+# --- FILE ANALYSIS & AUTO CONFIG ---
+uploaded_file = st.file_uploader("Drop Asset Matrix (.mp4, .mov, .gif)", type=["mp4", "mov", "gif"])
+
+auto_w, auto_h, auto_delay = 40, 20, 0.6
+is_gif = False
+
+if uploaded_file:
+    is_gif = uploaded_file.name.split(".")[-1].lower() == "gif"
+    file_bytes = uploaded_file.read()
+    
+    if is_gif:
+        img = Image.open(io.BytesIO(file_bytes))
+        duration = img.info.get("duration", 60) # in ms
+        auto_delay = max(0.4, duration / 1000.0) # convert to seconds, safety floor of 0.4
+        # GIFs can render slightly wider because Braille packs space efficiently
+        auto_w, auto_h = 56, 28
+    else:
+        with open("temp_probe.mp4", "wb") as f:
+            f.write(file_bytes)
+        cap = cv2.VideoCapture("temp_probe.mp4")
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        auto_delay = max(0.5, 1.0 / fps if fps > 0 else 0.5) # match real fps, cap at 0.5 for rate limit
+        auto_w, auto_h = 44, 20
+        cap.release()
+
+# --- CONFIG INTERFACE ---
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("🗂️ Asset Ingestion")
-    uploaded_file = st.file_uploader("Upload Target File (.mp4, .mov, .gif)", type=["mp4", "mov", "gif"])
+    st.subheader("🛠️ Engine Adjustments")
+    render_style = st.selectbox("2D Architecture Style", [
+        "True High-Res Braille Matrix", 
+        "High-Contrast Blocks", 
+        "Binary Terminal", 
+        "Classic Matrix ASCII"
+    ])
     
-    frame_width = st.slider("Matrix Width", 10, 50, 30)
-    frame_height = st.slider("Matrix Height", 10, 40, 15)
-    playback_speed = st.slider("Frame Hold Delay (Seconds)", 0.2, 1.5, 0.6)
+    # If using true Braille, we scale the matrix size up because 4 pixels fit in one text row!
+    default_w = auto_w * 2 if render_style == "True High-Res Braille Matrix" else auto_w
+    default_h = auto_h * 2 if render_style == "True High-Res Braille Matrix" else auto_h
+
+    width = st.slider("Target Width (Pixels)", 10, 120, default_w, help="Auto-optimized for your file.")
+    height = st.slider("Target Height (Pixels)", 10, 80, default_h, help="Auto-optimized for your file.")
+    delay = st.slider("Telemetry Frame Delay (Sec)", 0.2, 2.0, auto_delay)
 
 with col2:
-    st.subheader("📺 Telemetry Broadcast")
-    
-    if not token_valid:
-        st.info("Awaiting valid Discord user validation token verification from sidebar...")
-    elif uploaded_file is None:
-        st.info("Upload a video or an animated GIF file payload to begin rendering.")
+    st.subheader("📡 Live Broadcast Stream")
+    if not authenticated or not uploaded_file:
+        st.info("System offline. Provide authorization credentials and target data assets.")
     else:
-        file_extension = uploaded_file.name.split(".")[-1].lower()
-        
-        if st.button("🚀 INITIATE OVERWRITE STREAM"):
-            file_bytes = uploaded_file.read()
+        if st.button("🚀 EXECUTE DYNAMIC FLIPBOOK"):
+            frames = compile_frames(file_bytes, is_gif, width, height, render_style)
+            st.success(f"Telemetry lock ready. Total Frame Matrices: {len(frames)}")
             
-            with st.spinner(f"Decompiling .{file_extension} timeline arrays..."):
-                if file_extension == "gif":
-                    frames = process_gif_frames(file_bytes, frame_width, frame_height)
-                else:
-                    frames = process_video_frames(file_bytes, frame_width, frame_height)
-            
-            st.success(f"Compiled {len(frames)} frames into memory matrix!")
-            
-            # --- TRANSMISSION HOOK ---
             headers = {"Authorization": USER_TOKEN, "Content-Type": "application/json"}
-            base_url = f"https://discord.com/api/v9/channels/{TARGET_CHANNEL_ID}/messages"
+            url = f"https://discord.com/api/v9/channels/{TARGET_CHANNEL}/messages"
             
-            # Create base anchor message
-            init_res = requests.post(base_url, headers=headers, json={"content": "```\nLinking stream...```"})
-            
-            if init_res.status_code == 200:
-                msg_id = init_res.json()["id"]
-                edit_url = f"{base_url}/{msg_id}"
+            init = requests.post(url, headers=headers, json={"content": "```\nSyncing Matrix...```"})
+            if init.status_code == 200:
+                msg_id = init.json()["id"]
+                patch_url = f"{url}/{msg_id}"
                 
                 status_box = st.empty()
                 preview_box = st.empty()
                 
-                for idx, frame_content in enumerate(frames):
-                    status_box.text(f"Syncing Array: Frame {idx+1}/{len(frames)}")
-                    preview_box.markdown(frame_content)
+                for idx, frame in enumerate(frames):
+                    status_box.text(f"Sync Frame: {idx+1}/{len(frames)}")
+                    preview_box.markdown(frame)
                     
-                    res = requests.patch(edit_url, headers=headers, json={"content": frame_content})
-                    
+                    res = requests.patch(patch_url, headers=headers, json={"content": frame})
                     if res.status_code == 429:
-                        # Adaptive fallback if Discord's gatekeeper flags rate-limiting
-                        retry_sec = res.json().get("retry_after", 1.0)
-                        time.sleep(retry_sec)
+                        time.sleep(res.json().get("retry_after", 1.0))
                     else:
-                        time.sleep(playback_speed)
+                        time.sleep(delay)
                         
-                requests.patch(edit_url, headers=headers, json={"content": "```\n[PIPELINE OVERWRITE CONCLUDED]```"})
-                st.success("Sequence successfully written directly to Discord channel via account session.")
+                requests.patch(patch_url, headers=headers, json={"content": "```\n[TRANSMISSION COMPLETE]```"})
+                st.success("Pipeline clear.")
             else:
-                st.error(f"Failed connection sequence. Target destination error: {init_res.text}")
+                st.error("Target endpoint refused injection request.")
