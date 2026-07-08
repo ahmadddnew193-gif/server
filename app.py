@@ -26,27 +26,20 @@ def rgb_matrix_to_ansi(rgb_matrix):
     Uses half-blocks '▄' to display 2 full-color pixels per character slot!
     """
     h, w, _ = rgb_matrix.shape
-    # Height must be even for half-block packing
     h = h - (h % 2)
     
     output = []
     for y in range(0, h, 2):
         line = ""
         for x in range(w):
-            # Top pixel color (Foreground)
             r1, g1, b1 = rgb_matrix[y, x]
-            # Bottom pixel color (Background)
             r2, g2, b2 = rgb_matrix[y+1, x]
-            
-            # \u001b[38;2;R;G;Bm sets text color, \u001b[48;2;R;G;Bm sets background color
             line += f"\u001b[38;2;{r1};{g1};{b1};48;2;{r2};{g2};{b2}m▄"
-            
         output.append(line)
         
-    # Wrap in an ansi code block and clear formatting at the end
     return "```ansi\n" + "\n".join(output) + "\n```"
 
-# --- 2. OLDER MONOCHROME ENGINES ---
+# --- 2. MONOCHROME ENGINES ---
 def dynamic_braille_render(gray_matrix):
     h, w = gray_matrix.shape
     gray_matrix = gray_matrix[:h - (h % 4), :w - (w % 2)]
@@ -87,7 +80,6 @@ def compile_frames(file_bytes, is_gif, w, h, style):
     if is_gif:
         img = Image.open(io.BytesIO(file_bytes))
         for frame in ImageSequence.Iterator(img):
-            # Check if we need color or grayscale
             if style == "TrueColor RGB (ANSI)":
                 rgb_img = np.array(frame.convert("RGB"))
                 resized = cv2.resize(rgb_img, (w, h))
@@ -100,11 +92,13 @@ def compile_frames(file_bytes, is_gif, w, h, style):
                 else:
                     frames.append(standard_matrix_render(resized, style))
     else:
-        with open("temp.mp4", "wb") as f: f.write(file_bytes)
+        with open("temp.mp4", "wb") as f: 
+            f.write(file_bytes)
         cap = cv2.VideoCapture("temp.mp4")
         while cap.isOpened():
             ret, frame = cap.read()
-            if not ret: break
+            if not ret: 
+                break
             if style == "TrueColor RGB (ANSI)":
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 resized = cv2.resize(rgb_frame, (w, h))
@@ -124,16 +118,18 @@ st.sidebar.header("🔑 TOKENS")
 USER_TOKEN = st.sidebar.text_input("User Token", type="password")
 TARGET_CHANNEL = st.sidebar.text_input("Channel ID")
 authenticated = False
+
 if USER_TOKEN:
-    res = requests.get("[https://discord.com/api/v9/users/@me](https://discord.com/api/v9/users/@me)", headers={"Authorization": USER_TOKEN})
+    res = requests.get("https://discord.com/api/v9/users/@me", headers={"Authorization": USER_TOKEN})
     if res.status_code == 200:
         st.sidebar.success(f"Authenticated: {res.json()['username']}")
         authenticated = True
+    else:
+        st.sidebar.error("Invalid Handshake Protocol.")
 
 # --- 5. FILE UPLOADER & AUTO-CALCULATOR ---
 uploaded_file = st.file_uploader("Upload Asset (.mp4, .mov, .gif)", type=["mp4", "mov", "gif"])
 
-# Global defaults
 auto_w, auto_h, auto_delay = 40, 20, 0.6
 is_gif = False
 
@@ -145,7 +141,8 @@ if uploaded_file:
         img = Image.open(io.BytesIO(file_bytes))
         auto_delay = max(0.5, img.info.get("duration", 60) / 1000.0)
     else:
-        with open("temp_probe.mp4", "wb") as f: f.write(file_bytes)
+        with open("temp_probe.mp4", "wb") as f: 
+            f.write(file_bytes)
         cap = cv2.VideoCapture("temp_probe.mp4")
         fps = cap.get(cv2.CAP_PROP_FPS)
         auto_delay = max(0.6, 1.0 / fps if fps > 0 else 0.6)
@@ -163,8 +160,6 @@ with col1:
         "Classic Matrix ASCII"
     ])
     
-    # DYNAMIC AUTO-SLIDER ADJUSTMENT
-    # If using ANSI, crash the resolutions down because color codes consume huge text bytes!
     if render_style == "TrueColor RGB (ANSI)":
         max_w, default_w = 24, 16
         max_h, default_h = 20, 12
@@ -189,7 +184,7 @@ with col2:
             st.success(f"Buffer populated. Total frames loaded: {len(frames)}")
             
             headers = {"Authorization": USER_TOKEN, "Content-Type": "application/json"}
-            url = f"[https://discord.com/api/v9/channels/](https://discord.com/api/v9/channels/){TARGET_CHANNEL}/messages"
+            url = f"https://discord.com/api/v9/channels/{TARGET_CHANNEL}/messages"
             
             init = requests.post(url, headers=headers, json={"content": "```ansi\n\u001b[35mSyncing Chromatic Core...```"})
             if init.status_code == 200:
