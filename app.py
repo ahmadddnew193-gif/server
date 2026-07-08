@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image, ImageSequence
 import io
 
-st.set_page_config(page_title="NEON MULTI-SHADED CORE", layout="wide")
+st.set_page_config(page_title="NEON MATRIX PRODUCER", layout="wide")
 
 st.markdown("""
     <style>
@@ -19,7 +19,7 @@ st.markdown("""
 st.title("📟 MATRIX MULTI-SHADED PIPELINE")
 st.write("---")
 
-# --- 1. FULL COLOR ANSI ENGINE ---
+# --- 1. THE SHADER MODULES ---
 def rgb_matrix_to_ansi(rgb_matrix):
     h, w, _ = rgb_matrix.shape
     h = h - (h % 2)
@@ -33,29 +33,15 @@ def rgb_matrix_to_ansi(rgb_matrix):
         output.append(line)
     return "```ansi\n" + "\n".join(output) + "\n```"
 
-# --- 2. GREEN PHOSPHOR MATRIX ENGINE ---
 def gray_to_green_phosphor(gray_matrix):
-    # ANSI escape sequences for varying intensities of pure terminal green
-    green_ramp = [
-        " ", 
-        "\u001b[32m.", 
-        "\u001b[32m-", 
-        "\u001b[32m=", 
-        "\u001b[32m+", 
-        "\u001b[1;32m░", 
-        "\u001b[1;32m▒", 
-        "\u001b[1;32m▓", 
-        "\u001b[1;32m█"
-    ]
+    green_ramp = [" ", "\u001b[32m.", "\u001b[32m-", "\u001b[32m=", "\u001b[32m+", "\u001b[1;32m░", "\u001b[1;32m▒", "\u001b[1;32m▓", "\u001b[1;32m█"]
     output = []
     for row in gray_matrix:
         line = "".join([green_ramp[int((pixel / 255) * (len(green_ramp) - 1))] for pixel in row])
         output.append(line)
     return "```ansi\n" + "\n".join(output) + "\n```"
 
-# --- 3. HORIZONTAL SMOOTH-SCAN ENGINE ---
 def gray_to_smooth_scan(gray_matrix):
-    # Fractional horizontal rows that simulate moving wave telemetry
     scan_ramp = [" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
     output = []
     for row in gray_matrix:
@@ -63,7 +49,6 @@ def gray_to_smooth_scan(gray_matrix):
         output.append(line)
     return "```\n" + "\n".join(output) + "```"
 
-# --- 4. STANDARD MONOCHROME ENGINES ---
 def dynamic_braille_render(gray_matrix):
     h, w = gray_matrix.shape
     gray_matrix = gray_matrix[:h - (h % 4), :w - (w % 2)]
@@ -98,12 +83,16 @@ def standard_matrix_render(gray_matrix, matrix_type):
         output.append(line)
     return "```\n" + "\n".join(output) + "```"
 
-# --- 5. AUTOMATED TIMELINE PARSER ---
-def compile_frames(file_bytes, is_gif, w, h, style):
+# --- 2. PIPELINE COMPILER WITH FRAME SKIPPING ---
+def compile_frames(file_bytes, is_gif, w, h, style, frame_step):
     frames = []
     if is_gif:
         img = Image.open(io.BytesIO(file_bytes))
-        for frame in ImageSequence.Iterator(img):
+        # Loop over the GIF frames with our step interval
+        for idx, frame in enumerate(ImageSequence.Iterator(img)):
+            if idx % frame_step != 0:
+                continue
+                
             if style == "TrueColor RGB (ANSI)":
                 rgb_img = np.array(frame.convert("RGB"))
                 resized = cv2.resize(rgb_img, (w, h))
@@ -122,28 +111,33 @@ def compile_frames(file_bytes, is_gif, w, h, style):
     else:
         with open("temp.mp4", "wb") as f: f.write(file_bytes)
         cap = cv2.VideoCapture("temp.mp4")
+        frame_idx = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
-            if style == "TrueColor RGB (ANSI)":
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                resized = cv2.resize(rgb_frame, (w, h))
-                frames.append(rgb_matrix_to_ansi(resized))
-            else:
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                resized = cv2.resize(gray, (w, h))
-                if style == "Green Cyber Phosphor (ANSI)":
-                    frames.append(gray_to_green_phosphor(resized))
-                elif style == "Horizontal Smooth-Scan":
-                    frames.append(gray_to_smooth_scan(resized))
-                elif style == "True High-Res Braille Matrix":
-                    frames.append(dynamic_braille_render(resized))
+            
+            # Check frame step constraint
+            if frame_idx % frame_step == 0:
+                if style == "TrueColor RGB (ANSI)":
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    resized = cv2.resize(rgb_frame, (w, h))
+                    frames.append(rgb_matrix_to_ansi(resized))
                 else:
-                    frames.append(standard_matrix_render(resized, style))
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    resized = cv2.resize(gray, (w, h))
+                    if style == "Green Cyber Phosphor (ANSI)":
+                        frames.append(gray_to_green_phosphor(resized))
+                    elif style == "Horizontal Smooth-Scan":
+                        frames.append(gray_to_smooth_scan(resized))
+                    elif style == "True High-Res Braille Matrix":
+                        frames.append(dynamic_braille_render(resized))
+                    else:
+                        frames.append(standard_matrix_render(resized, style))
+            frame_idx += 1
         cap.release()
     return frames
 
-# --- 6. HANDSHAKE VERIFICATION ---
+# --- 3. TOKENS & SECURE CONNECTION ---
 st.sidebar.header("🔑 TELEMETRY")
 USER_TOKEN = st.sidebar.text_input("User Token", type="password")
 TARGET_CHANNEL = st.sidebar.text_input("Channel ID")
@@ -157,7 +151,7 @@ if USER_TOKEN:
     else:
         st.sidebar.error("Invalid Handshake Module.")
 
-# --- 7. AUTO CONFIG CALCULATIONS ---
+# --- 4. DATA INGESTION & HEADER LOGIC ---
 uploaded_file = st.file_uploader("Upload Core Asset Matrix (.mp4, .mov, .gif)", type=["mp4", "mov", "gif"])
 
 auto_w, auto_h, auto_delay = 40, 20, 0.6
@@ -177,7 +171,7 @@ if uploaded_file:
         auto_delay = max(0.6, 1.0 / fps if fps > 0 else 0.6)
         cap.release()
 
-# --- 8. UI ENGINE DISPLAY ---
+# --- 5. UI CONFIG INTERFACE ---
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -191,7 +185,6 @@ with col1:
         "Classic Matrix ASCII"
     ])
     
-    # Dynamic character ceilings to match limits
     if render_style in ["TrueColor RGB (ANSI)", "Green Cyber Phosphor (ANSI)"]:
         max_w, default_w = 24, 16
         max_h, default_h = 20, 12
@@ -204,7 +197,14 @@ with col1:
 
     width = st.slider("Width Allocation (Pixels)", 6, max_w, default_w)
     height = st.slider("Height Allocation (Pixels)", 6, max_h, default_h)
-    delay = st.slider("Frame Hold Timeline Delay (Sec)", 0.2, 2.0, auto_delay)
+    
+    # NEW FRAME SKIP SLIDER
+    frame_step = st.slider("Frame Step Interval", 1, 15, 1, 
+                           help="1 reads every frame. 2 reads every second frame. 10 skips to every tenth frame.")
+    
+    # Scale delay automatically if frames are skipped to keep animation at a natural pace
+    adjusted_delay = auto_delay * frame_step
+    delay = st.slider("Frame Hold Timeline Delay (Sec)", 0.1, 3.0, min(adjusted_delay, 3.0))
 
 with col2:
     st.subheader("📺 Output Status Console")
@@ -212,8 +212,9 @@ with col2:
         st.info("System offline. Input valid authorizations and files.")
     else:
         if st.button("🚀 IGNITE MATRIX SEQUENCE TRANSMISSION"):
-            frames = compile_frames(file_bytes, is_gif, width, height, render_style)
-            st.success(f"Buffer populated. Total frames ready: {len(frames)}")
+            # Pass frame_step into compilation module
+            frames = compile_frames(file_bytes, is_gif, width, height, render_style, frame_step)
+            st.success(f"Buffer populated. Total compiled frames: {len(frames)}")
             
             headers = {"Authorization": USER_TOKEN, "Content-Type": "application/json"}
             url = f"https://discord.com/api/v9/channels/{TARGET_CHANNEL}/messages"
